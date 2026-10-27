@@ -1,6 +1,6 @@
 # CCD Preprocessing Mini-Workshop
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOURUSER/YOURREPO/blob/main/ccd_preprocessing_astropy.ipynb?forcePlay=true)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/agustrionopj/python-mini-workshop/blob/main/ccd_preprocessing_astropy.ipynb?forcePlay=true)
 
 Hands-on notebook for the **Pelatihan Python — Imahnoong** mini-workshop:
 CCD image preprocessing (bias / dark / flat-field correction) with
