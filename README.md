@@ -2,9 +2,15 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/agustrionopj/python-mini-workshop/blob/main/ccd_preprocessing_astropy.ipynb?forcePlay=true)
 
+[![Open In Colab — Citra ilmiah sebagai data](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/agustrionopj/python-mini-workshop/blob/main/scientific_images_as_data.ipynb?forcePlay=true)
+
 Hands-on notebook for the **Pelatihan Python — Imahnoong** mini-workshop:
 CCD image preprocessing (bias / dark / flat-field correction) with
 [Astropy](https://www.astropy.org/) and [ccdproc](https://ccdproc.readthedocs.io/).
+
+Notebook kedua (`scientific_images_as_data.ipynb`) ditujukan untuk peserta
+**tanpa latar belakang astronomi** — 5 modul, ± 3 jam: citra sebagai data,
+statistik citra, kalibrasi, reduksi derau & warna, pengukuran + ekspor.
 
 Click the badge above to open the notebook in **playground mode** — you can run
 everything, but changes are only saved to your own Google Drive, never to this
@@ -15,14 +21,22 @@ repository.
 ```
 ccd-workshop/
 ├── README.md
-├── ccd_preprocessing_astropy.ipynb   ← the workshop notebook (open with badge)
+├── ccd_preprocessing_astropy.ipynb   ← workshop notebook 1 (open with badge)
+├── scientific_images_as_data.ipynb   ← workshop notebook 2, non-astronomer (open with badge)
 ├── scripts/
-│   └── generate_mock_data.py         ← regenerates the mock FITS data (maintainer only)
+│   ├── generate_mock_data.py         ← regenerates the mock CCD FITS data (maintainer only)
+│   └── generate_mock_data_basics.py  ← regenerates data/mock_basics/ (maintainer only)
 └── data/
-    ├── mock_nooverscan/              # 512×512 image, used by the main pipeline
+    ├── mock_nooverscan/              # 512×512 image, used by both notebooks
     │   ├── bias/  dark/  flat/  science/
-    └── mock_overscan/                # 512×512 + 16 overscan columns, used in Section 3B
-        ├── bias/  dark/  flat/  science/
+    ├── mock_overscan/                # 512×512 + 16 overscan columns, used in Section 3B
+    │   ├── bias/  dark/  flat/  science/
+    └── mock_basics/                  # image-basics data for notebook 2
+        ├── color_photo.png           # procedural RGB "everyday photo" (Pillow demo)
+        ├── problem_001.fit           # NaNs + saturated px + hot cluster + outliers
+        ├── clean_001.fit             # partner frame with different background
+        ├── field-r/g/b-001.fit       # 3 mono frames → RGB composite exercise
+        └── testpattern_001.fit       # star-free frame for hot-pixel reduction demo
 ```
 
 The notebook downloads the FITS files over HTTP — participants don't need
@@ -46,6 +60,17 @@ Main set (`mock_nooverscan/`, identical copies in `mock_overscan/`):
 | Dark | `dark/dark-mock-0120s-*.fit` | 5 | 120 s | dark current + hot pixels |
 | Flat | `flat/flat-mock-v-2s-*.fit` | 10 | 2 s | filter V, ~25 000 e⁻ signal, vignetting + dust |
 | Science | `science/field-mock-v-120s-*.fit` | 5 | 120 s | star field + cosmic rays |
+
+`mock_basics/` (notebook 2 — image basics, generator:
+`scripts/generate_mock_data_basics.py`, seed 20261101):
+
+| File | Purpose |
+|---|---|
+| `color_photo.png` | procedural RGB photo (sunset/lake) — Pillow & RGB-channel demos |
+| `problem_001.fit` | float32 frame with 1680 NaN, 3 saturated, hot cluster, 6 outliers |
+| `clean_001.fit` | uint16 partner frame (background ~80 ADU) — statistical comparison |
+| `field-r/g/b-001.fit` | 3 mono 256×256 frames — RGB composite (`make_lupton_rgb`) |
+| `testpattern_001.fit` | star-free frame with 60 isolated hot pixels — median-filter demo |
 
 ## Before the workshop (maintainer checklist)
 
