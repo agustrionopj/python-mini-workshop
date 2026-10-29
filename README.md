@@ -40,9 +40,8 @@ read noise 5 e⁻, −10 °C. Kamera yang sama disimulasikan dua kali: sebagai f
 (tambahan `DATASEC` / `BIASSEC` / `TRIMSEC` headers pada `mock_overscan`
 dataset).
 
-Main set (`mock_nooverscan/`, identical copies in `mock_overscan/`):
 
-| Frame type | File pattern | Count | Exposure | Notes |
+| Tipe frame | Pola | Jumlah | Exposur | Catatan |
 |---|---|---|---|---|
 | Bias | `bias/bias-mock-*.fit` | 10 | 0 s | bias level ~500 ADU + row drift |
 | Dark | `dark/dark-mock-0002s-*.fit` | 5 | 2 s | |
@@ -50,20 +49,19 @@ Main set (`mock_nooverscan/`, identical copies in `mock_overscan/`):
 | Flat | `flat/flat-mock-v-2s-*.fit` | 10 | 2 s | filter V, ~25 000 e⁻ signal, vignetting + dust |
 | Science | `science/field-mock-v-120s-*.fit` | 5 | 120 s | star field + cosmic rays |
 
-`mock_basics/` (notebook 2 — image basics, generator:
+`mock_basics/` (generator:
 `scripts/generate_mock_data_basics.py`, seed 20261101):
 
-| File | Purpose |
+| File | Tujuan |
 |---|---|
-| `color_photo.png` | procedural RGB photo (sunset/lake) — Pillow & RGB-channel demos |
-| `problem_001.fit` | float32 frame with 1680 NaN, 3 saturated, hot cluster, 6 outliers |
-| `clean_001.fit` | uint16 partner frame (background ~80 ADU) — statistical comparison |
-| `field-r/g/b-001.fit` | 3 mono 256×256 frames — RGB composite (`make_lupton_rgb`) |
-| `testpattern_001.fit` | star-free frame with 60 isolated hot pixels — median-filter demo |
+| `color_photo.png` | prosedural foto RGB photo (sunset/lake) — Pillow & RGB-channel demo |
+| `problem_001.fit` | float32 frame dengan 1680 NaN, 3 piksel saturasi, hot cluster, 6 outliers |
+| `clean_001.fit` | uint16 frame (background ~80 ADU);  perbandingan statistik |
+| `field-r/g/b-001.fit` | 3 mono 256×256 frames; komposit RGB (`make_lupton_rgb`) |
+| `testpattern_001.fit` | frame tanpa bintang dengan 60 hot pixels; median-filter demo |
 
-## How to run (for participants)
+## Cara menjalankan (untuk peserta)
 
-1. Click the **Open In Colab** badge above.
-2. Run the cells in order (Runtime → Run before, section by section is better
-   for following along).
-3. If you want to keep your edits / plots: **File → Save a copy in Drive**.
+1. Klik **Open In Colab** badge di atas.
+2. Jalankan cell secara berurutan.
+3. Jika perubahan ingin disimpan, **File → Save a copy in Drive**.
