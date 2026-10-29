@@ -7,9 +7,12 @@ Creates data/mock_basics/:
   clean_001.fit     - uint16 partner frame (different background, no defects)
   field-r-001.fit / field-g-001.fit / field-b-001.fit
                     - 256x256 mono frames for an RGB composite exercise
+  testpattern_001.fit - star-free frame for the hot-pixel reduction demo
+  overscan/         - compact set with a 16-column overscan strip:
+                      5 bias, 5 dark (120s), 5 flat (2s V), 2 science (120s V)
 
-Detector parameters are imported from generate_mock_data.py so both
-workshops describe the same simulated camera.
+Detector constants are defined inline (same simulated camera as
+generate_mock_data.py), so this script is self-sufficient.
 
 Usage:
     python scripts/generate_mock_data_basics.py
@@ -18,14 +21,27 @@ Usage:
 from __future__ import annotations
 
 import os
-import sys
 from datetime import datetime, timedelta
 
 import numpy as np
 from astropy.io import fits
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_mock_data import GAIN, READ_NOISE, SET_TEMP, OBS_START  # noqa: E402
+# detector constants (inlined; same simulated camera as generate_mock_data.py)
+GAIN = 1.0                  # e-/ADU (kept at 1 so ADU == e- for teaching)
+READ_NOISE = 5.0            # e- rms
+BIAS_LEVEL = 500.0          # ADU nominal bias level
+SET_TEMP = -10.0            # C
+OBS_START = datetime(2026, 10, 30, 21, 0, 0)
+
+# overscan set behavior (16 extra columns on the right side of the frame)
+N_OVERSCAN = 16             # overscan columns
+OVERSCAN_COLSIGMA = 1.5     # ADU sigma, per-column pattern in the strip
+BIAS_JITTER = 2.0           # ADU sigma, frame-to-frame bias level shift
+BIAS_ROW_DRIFT = 3.0        # ADU, smooth drift across rows within a frame
+OVERSCAN_OFFSET = 3.0       # ADU, strip level vs image-area bias level
+DARK_CURRENT = 0.3          # e-/s/pix
+FLAT_ILLUM = 25000.0        # e- total signal at frame centre for flats
+SKY_RATE = 2.0              # e-/s/pix sky background
 
 SEED = 20261101
 
@@ -182,6 +198,110 @@ def make_clean_frame(rng):
     return np.clip(np.round(img), 0, SATURATION).astype(np.uint16), 2
 
 
+# ---------------------------------------------------------------------------
+# Overscan set: 512x512 image + 16 overscan columns (strip = electronics only)
+# ---------------------------------------------------------------------------
+def overscan_header(imagetyp, filt, exptime, date_idx=0):
+    h = header_for(imagetyp, filt, 'adu', date_idx)
+    h['EXPTIME'] = exptime
+    h['DATASEC'] = '[1:512,1:512]'      # area citra
+    h['BIASSEC'] = '[513:528,1:512]'    # strip overscan (16 kolom)
+    h['TRIMSEC'] = '[1:512,1:512]'
+    h.add_history('strip overscan 16 kolom; level bias bergeser antar frame')
+    return h
+
+
+def make_overscan_maps(rng):
+    """Properti detektor yang tetap antar frame (kamera mock yang sama)."""
+    ny, nx = 512, 512
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    r = np.hypot(yy - (ny - 1) / 2, xx - (nx - 1) / 2)
+    vign = 1.0 - 0.15 * (r / r.max()) ** 2              # vignetting di sudut
+    prnu = rng.normal(1.0, 0.02, (ny, nx))              # sensitivitas piksel
+    dust = np.ones((ny, nx))
+    for _ in range(3):                                  # 3 donat debu
+        dy, dx = rng.integers(40, ny - 40), rng.integers(40, nx - 40)
+        rad, depth = rng.uniform(10, 25), rng.uniform(0.02, 0.08)
+        rr = np.hypot(yy - dy, xx - dx)
+        dust *= 1.0 - depth * np.exp(-0.5 * (rr / (rad / 2)) ** 2)
+    hot = rng.random((ny, nx)) < 0.001                  # 0.1% piksel panas
+    hot_rate = np.where(hot, rng.uniform(10.0, 100.0, (ny, nx)), 0.0)
+    return {'response': vign * prnu * dust,
+            'hot_rate': hot_rate,
+            'col_pattern': rng.normal(0.0, OVERSCAN_COLSIGMA, nx)}
+
+
+def make_star_catalog(rng, n_stars=80):
+    """Lapangan bintang tetap, dipakai bersama semua frame science."""
+    return [(rng.uniform(15, 497), rng.uniform(15, 497),
+             rng.uniform(1.2, 2.0), rng.uniform(2000.0, 20000.0))
+            for _ in range(n_stars)]
+
+
+def stamp_stars(img, stars, response):
+    """Bintang PSF Gaussian (elektron), teredam respons piksel."""
+    for x, y, sigma, peak in stars:
+        half = int(np.ceil(4 * sigma))
+        x0, x1 = max(int(x) - half, 0), min(int(x) + half + 1, 512)
+        y0, y1 = max(int(y) - half, 0), min(int(y) + half + 1, 512)
+        gx, gy = np.arange(x0, x1), np.arange(y0, y1)
+        stamp = peak * np.exp(-((gy[:, None] - y) ** 2
+                                + (gx[None, :] - x) ** 2) / (2 * sigma ** 2))
+        img[y0:y1, x0:x1] += stamp * response[y0:y1, x0:x1]
+
+
+def add_cosmic_rays(img, rng):
+    """Peristiwa sinar kosmik: 1-3 piksel dengan ekor pendek (elektron)."""
+    for _ in range(15):
+        y, x = int(rng.integers(2, 510)), int(rng.integers(2, 510))
+        length, angle = int(rng.integers(1, 4)), rng.uniform(0, 2 * np.pi)
+        val = rng.uniform(500.0, 20000.0)
+        for step in range(length):
+            yy, xx = int(round(y + step * np.sin(angle))), \
+                int(round(x + step * np.cos(angle)))
+            if 0 <= yy < 512 and 0 <= xx < 512:
+                img[yy, xx] += val
+            val *= 0.5
+
+
+def make_overscan_frame(rng, maps, stars, kind, exptime):
+    """Frame (512, 528): citra 512x512 + strip overscan 16 kolom.
+
+    Elektronik bias: level dasar + jitter antar frame + geseran halus
+    sepanjang baris -- strip mengikutinya persis (dibaca bersamaan).
+    """
+    ny, nx = 512, 512
+    jitter = rng.normal(0.0, BIAS_JITTER)
+    drift = np.cumsum(rng.normal(0.0, 0.3, ny))
+    drift = BIAS_ROW_DRIFT * (drift - drift.mean()) / max(np.abs(drift).max(), 1e-9)
+
+    img = (BIAS_LEVEL + jitter) + drift[:, None] + maps['col_pattern'][None, :]
+
+    rate = np.zeros((ny, nx))
+    if kind in ('DARK', 'SCIENCE'):     # arus gelap + piksel panas
+        rate += DARK_CURRENT + maps['hot_rate']
+    if kind == 'FLAT':                  # iluminasi merata ~25 000 e-
+        rate += (FLAT_ILLUM / exptime) * maps['response']
+    elif kind == 'SCIENCE':             # langit + lapangan bintang
+        rate += SKY_RATE * maps['response']
+    if exptime > 0:
+        img += rng.poisson(np.clip(rate * exptime, 0.0, None)).astype(float)
+    if kind == 'SCIENCE':
+        stamp_stars(img, stars, maps['response'])
+        add_cosmic_rays(img, rng)
+
+    img += rng.normal(0.0, READ_NOISE, img.shape)
+
+    # strip overscan: elektronik saja -- TANPA cahaya, TANPA arus gelap
+    os_pattern = rng.normal(0.0, OVERSCAN_COLSIGMA, N_OVERSCAN)
+    strip = np.tile((BIAS_LEVEL + OVERSCAN_OFFSET + jitter + os_pattern)[None, :],
+                    (ny, 1))
+    strip += drift[:, None]
+    strip += rng.normal(0.0, READ_NOISE, strip.shape)
+
+    return np.clip(np.round(np.hstack([img, strip])), 0, SATURATION).astype(np.uint16)
+
+
 def main(seed: int = SEED, out_dir: str | None = None):
     global OUT_DIR
     if out_dir:
@@ -250,8 +370,29 @@ def main(seed: int = SEED, out_dir: str | None = None):
     write_fits(tp.astype(np.uint16), header_for('SCIENCE', 'NONE', 'adu'),
                'testpattern_001.fit')
 
-    total = sum(os.path.getsize(os.path.join(OUT_DIR, f))
-                for f in os.listdir(OUT_DIR))
+    # --- set overscan: citra 512x512 + strip 16 kolom ------------------------
+    for sub in ('bias', 'dark', 'flat', 'science'):
+        os.makedirs(os.path.join(OUT_DIR, 'overscan', sub), exist_ok=True)
+
+    ov_rng = np.random.default_rng(seed + 777)   # aliran terpisah dari rng utama
+    ov_maps = make_overscan_maps(ov_rng)
+    ov_stars = make_star_catalog(ov_rng)
+    ov_specs = [('BIAS', 0.0, 'NONE', 5, 'bias/bias-mock-ov-{:03d}.fit'),
+                ('DARK', 120.0, 'NONE', 5, 'dark/dark-mock-ov-0120s-{:03d}.fit'),
+                ('FLAT', 2.0, 'V', 5, 'flat/flat-mock-ov-v-2s-{:03d}.fit'),
+                ('SCIENCE', 120.0, 'V', 2, 'science/field-mock-ov-v-120s-{:03d}.fit')]
+
+    print('--- overscan (citra 512x512 + 16 kolom overscan) ---')
+    date_idx = 0
+    for kind, exptime, filt, n, pattern in ov_specs:
+        for i in range(1, n + 1):
+            arr = make_overscan_frame(ov_rng, ov_maps, ov_stars, kind, exptime)
+            write_fits(arr, overscan_header(kind, filt, exptime, date_idx),
+                       'overscan/' + pattern.format(i))
+            date_idx += 1
+
+    total = sum(os.path.getsize(os.path.join(root, f))
+                for root, _, files in os.walk(OUT_DIR) for f in files)
     print(f'\nDone. {total / 1e6:.1f} MB in {OUT_DIR}')
 
 
